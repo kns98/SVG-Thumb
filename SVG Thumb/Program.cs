@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Collections.Generic;
-using System.Linq;
 using SkiaSharp;
 using Svg.Skia;
 
@@ -9,9 +8,6 @@ namespace SvgProcessingApp
 {
     class Program
     {
-        static int dpi = 600;
-        static float inchToPixel = dpi / 2.54f; // Convert DPI to pixels per inch
-
         static void Main(string[] args)
         {
             if (args.Length < 1)
@@ -34,6 +30,8 @@ namespace SvgProcessingApp
                 return;
             }
 
+            int dpi = 600;
+            float inchToPixel = dpi / 2.54f; // Convert DPI to pixels per inch
             int thumbnailSize = (int)(1.5 * inchToPixel); // 1.5 inches
             int margin = (int)(0.5 * inchToPixel); // 0.5 inches margin
             int rows = 7;
@@ -45,9 +43,78 @@ namespace SvgProcessingApp
             var groupedSvgFiles = GroupSvgFilesByProportion(svgFiles);
             int pageNumber = 1;
 
-            foreach (var group in groupedSvgFiles)
+            using (var surface = CreateNewSurface(width, height))
             {
-                ProcessSvgGroup(group, directoryPath, width, height, thumbnailSize, margin, rows, cols, thumbnailsPerPage, ref pageNumber);
+                var canvas = surface.Canvas;
+                canvas.Clear(SKColors.White);
+
+                int x = margin;
+                int y = margin;
+                int imageHeightWithText = thumbnailSize + (int)(0.2 * inchToPixel); // Thumbnail + text height
+                int counter = 0;
+
+                foreach (var group in groupedSvgFiles)
+                {
+                    foreach (var svgFilePath in group)
+                    {
+                        if (counter > 0 && counter % thumbnailsPerPage == 0)
+                        {
+                            SavePage(surface, directoryPath, ref pageNumber);
+                            
+                            canvas = surface.Canvas;
+                            canvas.Clear(SKColors.White);
+                            x = margin;
+                            y = margin;
+                        }
+
+                        var svg = new SKSvg();
+                        svg.Load(svgFilePath);
+
+                        if (svg.Picture != null)
+                        {
+                            float originalWidth = svg.Picture.CullRect.Width;
+                            float originalHeight = svg.Picture.CullRect.Height;
+                            float scale = Math.Min((float)thumbnailSize / originalWidth, (float)thumbnailSize / originalHeight);
+
+                            using (var bitmap = SKPictureExtensions.ToBitmap(svg.Picture, SKColors.Transparent, scale, scale, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb()))
+                            {
+                                float offsetX = (thumbnailSize - bitmap.Width) / 2f;
+                                float offsetY = (thumbnailSize - bitmap.Height) / 2f;
+                                canvas.DrawBitmap(bitmap, x + offsetX, y + offsetY);
+
+                                var paint = new SKPaint
+                                {
+                                    Color = SKColors.Black,
+                                    IsAntialias = true,
+                                    TextSize = 10 * inchToPixel / 72f // 10pt font size
+                                };
+
+                                string fileName = Path.GetFileName(svgFilePath);
+                                canvas.DrawText(fileName, x, y + thumbnailSize + paint.TextSize, paint);
+
+                                Console.WriteLine($"Processed: {fileName}");
+
+                                x += thumbnailSize + margin;
+                                if (x + thumbnailSize + margin > width)
+                                {
+                                    x = margin;
+                                    y += imageHeightWithText + margin;
+                                }
+
+                                counter++;
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Failed to load SVG file: {svgFilePath}");
+                        }
+                    }
+                }
+
+                if (counter % thumbnailsPerPage != 0)
+                {
+                    SavePage(surface, directoryPath, ref pageNumber);
+                }
             }
         }
 
@@ -91,73 +158,9 @@ namespace SvgProcessingApp
             return groups;
         }
 
-        private static void ProcessSvgGroup(List<string> svgGroup, string directoryPath, int width, int height, int thumbnailSize, int margin, int rows, int cols, int thumbnailsPerPage, ref int pageNumber)
+        private static SKSurface CreateNewSurface(int width, int height)
         {
-            int counter = 0;
-            using (var surface = SKSurface.Create(new SKImageInfo(width, height)))
-            {
-                var canvas = surface.Canvas;
-                canvas.Clear(SKColors.White);
-
-                int x = margin;
-                int y = margin;
-                int imageHeightWithText = thumbnailSize + (int)(0.2 * inchToPixel); // Thumbnail + text height
-
-                foreach (var svgFilePath in svgGroup)
-                {
-                    if (counter > 0 && counter % thumbnailsPerPage == 0)
-                    {
-                        SavePage(surface, directoryPath, ref pageNumber);
-                        canvas.Clear(SKColors.White);
-                        x = margin;
-                        y = margin;
-                    }
-
-                    var svg = new SKSvg();
-                    svg.Load(svgFilePath);
-
-                    if (svg.Picture != null)
-                    {
-                        float originalWidth = svg.Picture.CullRect.Width;
-                        float originalHeight = svg.Picture.CullRect.Height;
-                        float scale = Math.Min((float)thumbnailSize / originalWidth, (float)thumbnailSize / originalHeight);
-
-                        using (var bitmap = SKPictureExtensions.ToBitmap(svg.Picture, SKColors.Transparent, scale, scale, SKColorType.Rgba8888, SKAlphaType.Unpremul, SKColorSpace.CreateSrgb()))
-                        {
-                            float offsetX = (thumbnailSize - bitmap.Width) / 2f;
-                            float offsetY = (thumbnailSize - bitmap.Height) / 2f;
-                            canvas.DrawBitmap(bitmap, x + offsetX, y + offsetY);
-
-                            var paint = new SKPaint
-                            {
-                                Color = SKColors.Black,
-                                IsAntialias = true,
-                                TextSize = 10 * inchToPixel / 72f // 10pt font size
-                            };
-
-                            string fileName = Path.GetFileName(svgFilePath);
-                            canvas.DrawText(fileName, x, y + thumbnailSize + paint.TextSize, paint);
-
-                            Console.WriteLine($"Processed: {fileName}");
-
-                            x += thumbnailSize + margin;
-                            if (x + thumbnailSize + margin > width)
-                            {
-                                x = margin;
-                                y += imageHeightWithText + margin;
-                            }
-
-                            counter++;
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to load SVG file: {svgFilePath}");
-                    }
-                }
-
-                SavePage(surface, directoryPath, ref pageNumber);
-            }
+            return SKSurface.Create(new SKImageInfo(width, height));
         }
 
         private static void SavePage(SKSurface surface, string directoryPath, ref int pageNumber)
