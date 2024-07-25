@@ -1,20 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SVG_Thumb
 {
-    using System;
-    using System.Collections.Generic;
-
     class Program
     {
-        static List<(string region, string size, double width, double height)> GetPaperSizes()
-        {
-            // Define a dictionary to store paper sizes for different regions
-            var paperSizesDict = new Dictionary<string, Dictionary<string, (double width, double height)>>()
+        static readonly Dictionary<string, Dictionary<string, (double width, double height)>> paperSizesDict =
+            new()
         {
             {
                 "ISO", new Dictionary<string, (double width, double height)>
@@ -68,19 +60,7 @@ namespace SVG_Thumb
             }
         };
 
-            // Convert the dictionary to a list of tuples
-            var paperSizesList = new List<(string region, string size, double width, double height)>();
 
-            foreach (var region in paperSizesDict)
-            {
-                foreach (var size in region.Value)
-                {
-                    paperSizesList.Add((region.Key, size.Key, size.Value.width, size.Value.height));
-                }
-            }
 
-            return paperSizesList;
-        }
     }
-
 }
