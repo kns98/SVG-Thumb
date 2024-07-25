@@ -11,17 +11,6 @@ namespace SVG_Thumb
 
     class Program
     {
-        static void Main()
-        {
-            var paperSizes = GetPaperSizes();
-
-            // Print all paper sizes
-            foreach (var paperSize in paperSizes)
-            {
-                Console.WriteLine($"Region: {paperSize.region}, Size: {paperSize.size}, Width: {paperSize.width} inches, Height: {paperSize.height} inches");
-            }
-        }
-
         static List<(string region, string size, double width, double height)> GetPaperSizes()
         {
             // Define a dictionary to store paper sizes for different regions
