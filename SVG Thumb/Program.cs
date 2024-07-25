@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Collections.Generic;
 using SkiaSharp;
@@ -8,22 +8,36 @@ namespace SvgProcessingApp
 {
     class Program
     {
+        static float pageWidthInches = 0;
+        static float pageHeightInches = 0;
+        static float thumbnailSizeInches = 0;
+        //static string directoryPath = "C:\\Users\\kevin\\Documents\\GitHub\\MyArt";
+        static string directoryPath = ".";
         static void Main(string[] args)
         {
             if (args.Length < 1)
             {
-                Console.WriteLine("Usage: SvgProcessingApp <directoryPath>");
-                return;
+                  Console.WriteLine("Usage: SvgProcessingApp <directoryPath> [pageWidthInches] [pageHeightInches] [thumbnailSizeInches]");
+                  pageWidthInches = args.Length > 1 ? float.Parse(args[1]) : 8.5f;
+                  pageHeightInches = args.Length > 2 ? float.Parse(args[2]) : 11f;
+                  thumbnailSizeInches = args.Length > 3 ? float.Parse(args[3]) : 1.5f;
+                  string directoryPath = args[0];
+                  return;
             }
 
-            string directoryPath = args[0];
+            pageWidthInches = 8.5f;
+            pageHeightInches = 11.0f;
+            thumbnailSizeInches = 1.5f;
+
             if (!Directory.Exists(directoryPath))
             {
                 Console.WriteLine($"Directory does not exist: {directoryPath}");
                 return;
             }
 
-            var svgFiles = Directory.GetFiles(directoryPath, "*.svg");
+
+
+            string[] svgFiles = Directory.GetFiles(directoryPath, "*.svg", SearchOption.AllDirectories);
             if (svgFiles.Length == 0)
             {
                 Console.WriteLine("No SVG files found to process.");
@@ -32,16 +46,18 @@ namespace SvgProcessingApp
 
             int dpi = 600;
             float inchToPixel = dpi / 2.54f; // Convert DPI to pixels per inch
-            int thumbnailSize = (int)(1.5 * inchToPixel); // 1.5 inches
+            int thumbnailSize = (int)(thumbnailSizeInches * inchToPixel);
             int margin = (int)(0.5 * inchToPixel); // 0.5 inches margin
-            int rows = 7;
-            int cols = 5;
+            int rows = (int)((pageHeightInches * inchToPixel - 2 * margin) / thumbnailSize);
+            int cols = (int)((pageWidthInches * inchToPixel - 2 * margin) / thumbnailSize);
             int thumbnailsPerPage = rows * cols;
-            int width = (int)(8.5 * inchToPixel);
-            int height = (int)(11 * inchToPixel);
+            int width = (int)(pageWidthInches * inchToPixel);
+            int height = (int)(pageHeightInches * inchToPixel);
 
             var groupedSvgFiles = GroupSvgFilesByProportion(svgFiles);
             int pageNumber = 1;
+            string catalogDirectory = Path.Combine(directoryPath, "catalogue");
+            Directory.CreateDirectory(catalogDirectory);
 
             using (var surface = CreateNewSurface(width, height))
             {
@@ -59,8 +75,8 @@ namespace SvgProcessingApp
                     {
                         if (counter > 0 && counter % thumbnailsPerPage == 0)
                         {
-                            SavePage(surface, directoryPath, ref pageNumber);
-                            
+                            SavePage(surface, catalogDirectory, ref pageNumber);
+                            Console.WriteLine("Saved page" + pageNumber);
                             canvas = surface.Canvas;
                             canvas.Clear(SKColors.White);
                             x = margin;
@@ -81,6 +97,8 @@ namespace SvgProcessingApp
                                 float offsetX = (thumbnailSize - bitmap.Width) / 2f;
                                 float offsetY = (thumbnailSize - bitmap.Height) / 2f;
                                 canvas.DrawBitmap(bitmap, x + offsetX, y + offsetY);
+
+                                Console.WriteLine("Drew bitmap for " + svgFilePath);
 
                                 var paint = new SKPaint
                                 {
@@ -113,7 +131,7 @@ namespace SvgProcessingApp
 
                 if (counter % thumbnailsPerPage != 0)
                 {
-                    SavePage(surface, directoryPath, ref pageNumber);
+                    SavePage(surface, catalogDirectory, ref pageNumber);
                 }
             }
         }
@@ -128,6 +146,8 @@ namespace SvgProcessingApp
             {
                 var svg = new SKSvg();
                 svg.Load(svgFilePath);
+
+                Console.WriteLine("Loaded for grouping " + svgFilePath);
 
                 if (svg.Picture != null)
                 {
@@ -163,12 +183,12 @@ namespace SvgProcessingApp
             return SKSurface.Create(new SKImageInfo(width, height));
         }
 
-        private static void SavePage(SKSurface surface, string directoryPath, ref int pageNumber)
+        private static void SavePage(SKSurface surface, string catalogDirectory, ref int pageNumber)
         {
             using (var image = surface.Snapshot())
             using (var data = image.Encode(SKEncodedImageFormat.Jpeg, 100))
             {
-                string outputFilePath = Path.Combine(directoryPath, $"thumbnail_sheet_page_{pageNumber}.jpg");
+                string outputFilePath = Path.Combine(catalogDirectory, $"thumbnail_sheet_page_{pageNumber}.jpg");
                 using (var stream = File.OpenWrite(outputFilePath))
                 {
                     data.SaveTo(stream);
